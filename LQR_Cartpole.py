@@ -13,11 +13,13 @@ def solve_riccati_arimoto_potter(A, B, Q, R):
 
 
 def main():
-    alpha = 5.0
+    alpha = 10.0
     beta = 1.0
+    max_step = 500
 
     env = gym.make('CartPole-v0')
-    env.seed(1)
+    # env.seed(1)
+    env.spec.timestep_limit = max_step
 
     gravity = env.gravity
     masscart = env.masscart
@@ -47,7 +49,7 @@ def main():
     control_log = []
     total_reward = 0
 
-    for t in range(500):
+    for t in range(max_step):
         force = -K_scipy.dot(obs)[0]
         control_log.append(force)
         env.env.force_mag = force
@@ -55,13 +57,16 @@ def main():
         obs_log.append(obs)
         total_reward += reward
         env.render()
-        if done:
-            print(f"{t=},{total_reward=}")
-            fig, ax = plt.subplots(2)
-            ax[0].plot(obs_log)
-            ax[0].legend(['x', 'x_dot', 'theta', 'theta_dot'])
-            ax[1].plot(control_log)
-            plt.show()
+    print(f"{t=},{total_reward=}")
+    fig, ax = plt.subplots(2, tight_layout=True)
+    ax[0].plot(obs_log)
+    ax[0].legend(['x', 'x_dot', 'theta', 'theta_dot'])
+    ax[0].set_title("State Variables")
+    ax[0].grid(True)
+    ax[1].plot(control_log)
+    ax[1].set_title("Control Value(Force)")
+    ax[1].grid(True)
+    plt.show()
 
 
 if __name__ == "__main__":

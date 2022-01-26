@@ -35,6 +35,10 @@ def main():
 
     B = np.array([[0.], [1. / (masscart + masspole)], [0.], [-1. / k]])
 
+    target = np.array([1.0, 0., 0., 0.])
+    # b_ue = A.dot(target)
+    target_u = - np.linalg.pinv(B).dot(A.dot(target))
+
     Q = alpha * np.eye(4)
     R = beta * np.eye(1)
 
@@ -50,7 +54,7 @@ def main():
     total_reward = 0
 
     for t in range(max_step):
-        force = -K_scipy.dot(obs)[0]
+        force = (-K_scipy.dot(obs - target) - target_u)[0]
         control_log.append(force)
         env.env.force_mag = force
         obs, reward, done, _ = env.step(1)

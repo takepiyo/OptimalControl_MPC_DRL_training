@@ -19,7 +19,6 @@ def main():
 
     env = gym.make('CartPole-v0')
     # env.seed(1)
-    env.spec.timestep_limit = max_step
 
     gravity = env.gravity
     masscart = env.masscart

@@ -1,5 +1,6 @@
 import gym
 from gym import spaces
+from gym.envs.classic_control import rendering
 from gym.utils import seeding
 import numpy as np
 import math
@@ -43,6 +44,7 @@ class IndependentTwoWheeledRobot(gym.Env):
         B = np.array([[0.5 * self.wheel_radius * costheta, 0.5 * self.wheel_radius * costheta], [0., 0.], [0.5 * self.wheel_radius *
                      sintheta, 0.5 * self.wheel_radius * sintheta], [0., 0.], [0.5 / self.wheel_distance, - 0.5 / self.wheel_distance], [0., 0.]])
 
+        self.pre_state = np.copy(self.state)
         self.state += B.dot(action) * self.tau
 
         done = False
@@ -54,24 +56,22 @@ class IndependentTwoWheeledRobot(gym.Env):
 
     def reset(self):
         self.state = self.np_random.uniform(low=-0.0, high=0.0, size=(6,))
+        self.pre_state = None
         return np.array(self.state, dtype=np.float32)
 
     def render(self, mode="human"):
-        screen_width = 800
-        screen_height = 600
-
-        world_width = self.x_threshold * 2
-        world_height = self.y_threshold * 2
-        scale_x = screen_width / world_width
-        scale_y = screen_height / world_height
-        robot_radius = self.wheel_distance
-
         if self.viewer is None:
-            from gym.envs.classic_control import rendering
-
-            self.viewer = rendering.Viewer(screen_width, screen_height)
+            self.screen_width = 800
+            self.screen_height = 600
+            self.world_width = self.x_threshold * 2
+            self.world_height = self.y_threshold * 2
+            self.scale_x = self.screen_width / self.world_width
+            self.scale_y = self.screen_height / self.world_height
+            self.robot_radius = self.wheel_distance
+            self.viewer = rendering.Viewer(
+                self.screen_width, self.screen_height)
             robot = rendering.Compound(
-                [rendering.make_circle(robot_radius, filled=False), rendering.Line(start=(0, 0), end=(robot_radius, 0))])
+                [rendering.make_circle(self.robot_radius, filled=False), rendering.Line(start=(0, 0), end=(self.robot_radius, 0))])
             self.robottrans = rendering.Transform()
             robot.add_attr(self.robottrans)
             self.viewer.add_geom(robot)
@@ -80,11 +80,21 @@ class IndependentTwoWheeledRobot(gym.Env):
             return None
 
         x, x_dot, y, y_dot, theta, theta_dot = self.state
-        self.robottrans.set_translation(
-            x * scale_x + screen_width / 2.0, y * scale_y + screen_height / 2.0)
+        self.robottrans.set_translation(*self.scale_and_offset_position(x, y))
         self.robottrans.set_rotation(theta)
 
+        if self.pre_state is not None:
+            trajectory = rendering.Line(
+                self.scale_and_offset_position(
+                    self.pre_state[0], self.pre_state[2]),
+                self.scale_and_offset_position(self.state[0], self.state[2]))
+            trajectory.set_color(0.3, 0.3, 1)
+            self.viewer.add_geom(trajectory)
+
         return self.viewer.render(return_rgb_array=mode == "rgb_array")
+
+    def scale_and_offset_position(self, x, y):
+        return x * self.scale_x + self.screen_width / 2.0, y * self.scale_y + self.screen_height / 2.0
 
     def close(self):
         if self.viewer:

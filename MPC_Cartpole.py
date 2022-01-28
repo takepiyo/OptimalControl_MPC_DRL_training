@@ -5,6 +5,10 @@ from scipy import linalg
 import matplotlib.pyplot as plt
 import gym
 
+"""
+reference: https://myenigma.hatenablog.com/entry/2017/02/07/084922
+"""
+
 
 def opt_mpc_with_input_const(A, B, N, Q, R, P, x0, umax=None, umin=None):
     (nx, nu) = B.shape

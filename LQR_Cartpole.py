@@ -3,6 +3,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy import linalg
 
+"""
+reference: https://towardsdatascience.com/comparing-optimal-control-and-reinforcement-learning-using-the-cart-pole-swing-up-openai-gym-772636bc48f4
+"""
+
 
 def solve_riccati_iter(A, B, Q, R, tolerance=1e-5, max_iter=1e6):
     pass

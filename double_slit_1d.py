@@ -6,15 +6,18 @@ from tqdm import tqdm
 
 
 class DoubleSlit1DSOC:
-    def __init__(self, tf, slit_t, v, R, alpha, slit1, slit2) -> None:
+    def __init__(self, tf, slit_t, dt, v, R, alpha, slit1, slit2, x_min, x_max) -> None:
         self.tf = tf
         self.slit_t = slit_t
+        self.dt = dt
         self.v = v
         self.R = R
         self.alpha = alpha
 
         self.slit1 = slit1
         self.slit2 = slit2
+        self.x_min = x_min
+        self.x_max = x_max
 
         self.sigma = lambda t: math.sqrt(v * (tf - t))
         self.sigma_1 = lambda t: math.sqrt(self.sigma(
@@ -26,7 +29,7 @@ class DoubleSlit1DSOC:
         self.P = lambda x, t: self.F(
             slit1[1], x, t) - self.F(slit1[0], x, t) + self.F(slit2[1], x, t) - self.F(slit2[0], x, t)
         self.J = lambda x, t: v * R * math.log(self.sigma(t) / self.sigma_1(t)) + 0.5 * (
-            self.sigma_1(t) * x / self.sigma(t)) ** 2 - v * R * math.log(0.5 * (self.P(x, t))) if t <= slit_t else v * R * math.log(self.sigma(t) / self.sigma_1(t)) + 0.5 * (
+            self.sigma_1(t) * x / self.sigma(t)) ** 2 - v * R * math.log(0.5 * (self.P(x, t)) + 1e-5) if t < slit_t else v * R * math.log(self.sigma(t) / self.sigma_1(t)) + 0.5 * (
             self.sigma_1(t) * x / self.sigma(t)) ** 2 * alpha
         self.partial_xF = lambda x_0, x, t: 2 / math.sqrt(math.pi) * math.exp(-math.sqrt(
             self.A(t) / (2 * v)) * (x_0 - self.B(x, t) / self.A(t)) ** 2)
@@ -34,10 +37,19 @@ class DoubleSlit1DSOC:
             slit1[0], x, t) + self.partial_xF(slit2[1], x, t) - self.partial_xF(slit2[0], x, t)
 
         self.optimal_u = lambda x, t: - (v * x) / (R + tf - t) - (self.partial_xP(x, t) / self.P(x, t)) * (v / (
-            math.sqrt(2 * v * self.A(t)) * (slit_t - t))) if t <= slit_t else - (alpha * x) / (R + alpha * (tf - t))
+            math.sqrt(2 * v * self.A(t)) * (slit_t - t))) if t < slit_t else - (alpha * x) / (R + alpha * (tf - t))
 
     def command(self, x, t):
-        return self.optimal_u(x, t), self.J(x, t)
+        return self.optimal_u(x, t)
+
+    def draw_J(self):
+        fig, ax = plt.subplots()
+        x = np.arange(self.x_min, self.x_max, 0.01)
+        for t in [0.0, self.slit_t - self.dt, self.slit_t + self.dt, self.tf - self.dt]:
+            ax.plot(x, list(map(lambda x: self.J(x, t), x)),
+                    label="t={}".format(t))
+        ax.legend()
+        plt.show()
 
 
 class DoubleSlit1D:
@@ -75,11 +87,10 @@ class DoubleSlit1D:
 
     def step(self, u):
         self.n += 1
-        self.wiener += np.sqrt(self.dt) * np.random.randn()
-        self.x += u * self.dt + self.wiener
+        self.x += u * self.dt + np.sqrt(self.dt) * np.random.randn()
         self.x_array[self.n] = self.x
-        done = True if (self.n + 1 == self.max_n or self.V(self.x, self.n)
-                        > 0 or not (self.x_min < self.x < self.x_max)) else False
+        done = (self.n + 1 == self.max_n or self.V(self.x, self.n) > 0 or not (
+            self.x_min < self.x < self.x_max))
         return self.x, self.t_array[self.n], done
 
     def render(self):
@@ -97,19 +108,33 @@ class DoubleSlit1D:
         ax.plot(self.t_array[: self.n + 1], self.x_array[: self.n + 1])
         plt.show()
 
+    def render_multiple_path(self, x_arrays):
+        fig, ax = plt.subplots()
+        ax.set_ylim(self.x_min, self.x_max)
+        ax.set_xlim(0, self.T)
+        ax.set_aspect(0.08)
+        ax.plot([self.slit_t, self.slit_t],
+                [self.x_min, self.slit1[0]], color="black")
+        ax.plot([self.slit_t, self.slit_t], [
+            self.slit1[1], self.slit2[0]], color="black")
+        ax.plot([self.slit_t, self.slit_t],
+                [self.slit2[1], self.x_max], color="black")
+
+        for n, x_array in x_arrays:
+            ax.plot(self.t_array[: n + 1], x_array[: n + 1])
+        plt.show()
+
 
 if __name__ == "__main__":
     env = DoubleSlit1D()
-    ctrl = DoubleSlit1DSOC(env.T, env.slit_t, env.v, env.R,
-                           env.alpha, env.slit1, env.slit2)
-    for _ in tqdm(range(10000)):
+    ctrl = DoubleSlit1DSOC(env.T, env.slit_t, env.dt, env.v, env.R,
+                           env.alpha, env.slit1, env.slit2, env.x_min, env.x_max)
+    traj = []
+    for _ in tqdm(range(10)):
         x, t, done = env.reset()
         while not done:
-            try:
-                u, J = ctrl.command(x, t)
-            except ZeroDivisionError:
-                break
+            u = ctrl.command(x, t)
             x, t, done = env.step(u=u)
-        print(env.n)
-        if env.n > env.max_n / 1.5:
-            env.render()
+        traj.append((env.n, env.x_array))
+    env.render_multiple_path(traj)
+    ctrl.draw_J()

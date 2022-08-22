@@ -52,6 +52,35 @@ class DoubleSlit1DSOC:
         plt.show()
 
 
+class DoubleSlitPathIntegral:
+    def __init__(self, env, N) -> None:
+        self.env = env
+        self.N = N
+        self.dt = env.dt
+        self.v = env.v
+        self.phi = env.phi
+
+        self.sampled_cost = []
+        self.noise_history = []
+        self.traj = []
+        for _ in tqdm(range(N)):
+            x, t, done = env.reset()
+            while not done:
+                x, t, done = env.step(u=0)
+            if env.n + 1 == env.max_n:
+                self.sampled_cost.append(math.exp(-self.phi(x) / self.v))
+                self.noise_history.append(env.noise_array)
+            self.traj.append((env.n, env.x_array))
+        self.noise_history = np.stack(self.noise_history)
+        # env.render_multiple_path(self.traj)
+
+        self.psi = sum(self.sampled_cost) / N
+
+    def command(self, x, t):
+        return np.sum(self.sampled_cost * (self.noise_history[:, int(t / self.dt)])) / self.psi
+        # return np.sum(self.sampled_cost * (self.noise_history[:, 1])) / self.psi
+
+
 class DoubleSlit1D:
     def __init__(self) -> None:
         self.T = 2.0
@@ -69,7 +98,7 @@ class DoubleSlit1D:
         self.alpha = 1.0
         self.phi = lambda x: 0.5 * self.alpha * x ** 2
         self.v = 1.0
-        self.R = 1.0
+        self.R = 0.1
 
     def reset(self):
         self.x = 0.0
@@ -80,14 +109,16 @@ class DoubleSlit1D:
         self.t_array = np.arange(0, self.T, self.dt)
         self.x_array = np.zeros_like(self.t_array)
         self.x_array[self.n] = self.x
-        self.cost_array = np.zeros_like(self.t_array)
+        self.noise_array = np.zeros_like(self.t_array)
 
         done = True if self.n == self.max_n else False
         return self.x, self.t_array[self.n], done
 
     def step(self, u):
         self.n += 1
-        self.x += u * self.dt + np.sqrt(self.dt) * np.random.randn()
+        noise = np.sqrt(self.dt) * np.random.randn()
+        self.noise_array[self.n] = noise
+        self.x += u * self.dt + noise
         self.x_array[self.n] = self.x
         done = (self.n + 1 == self.max_n or self.V(self.x, self.n) > 0 or not (
             self.x_min < self.x < self.x_max))
@@ -129,12 +160,13 @@ if __name__ == "__main__":
     env = DoubleSlit1D()
     ctrl = DoubleSlit1DSOC(env.T, env.slit_t, env.dt, env.v, env.R,
                            env.alpha, env.slit1, env.slit2, env.x_min, env.x_max)
+    # ctrl = DoubleSlitPathIntegral(env, 100000)
     traj = []
-    for _ in tqdm(range(10)):
+    for _ in tqdm(range(100)):
         x, t, done = env.reset()
         while not done:
             u = ctrl.command(x, t)
             x, t, done = env.step(u=u)
         traj.append((env.n, env.x_array))
     env.render_multiple_path(traj)
-    ctrl.draw_J()
+    # ctrl.draw_J()

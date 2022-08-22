@@ -75,10 +75,11 @@ class DoubleSlitPathIntegral:
         # env.render_multiple_path(self.traj)
 
         self.psi = sum(self.sampled_cost) / N
+        a = 1
 
     def command(self, x, t):
-        return np.sum(self.sampled_cost * (self.noise_history[:, int(t / self.dt)])) / self.psi
-        # return np.sum(self.sampled_cost * (self.noise_history[:, 1])) / self.psi
+        # return np.sum(self.sampled_cost * (self.noise_history[:, int(t / self.dt)])) / (self.psi * self.N)
+        return np.sum(self.sampled_cost * (self.noise_history[:, 1])) / (self.psi * self.N)
 
 
 class DoubleSlit1D:
@@ -100,8 +101,8 @@ class DoubleSlit1D:
         self.v = 1.0
         self.R = 0.1
 
-    def reset(self):
-        self.x = 0.0
+    def reset(self, x_0=0.0):
+        self.x = x_0
         self.wiener = 0.0
         self.t = 0.0
         self.n = 0
@@ -158,12 +159,12 @@ class DoubleSlit1D:
 
 if __name__ == "__main__":
     env = DoubleSlit1D()
-    ctrl = DoubleSlit1DSOC(env.T, env.slit_t, env.dt, env.v, env.R,
-                           env.alpha, env.slit1, env.slit2, env.x_min, env.x_max)
-    # ctrl = DoubleSlitPathIntegral(env, 100000)
+    # ctrl = DoubleSlit1DSOC(env.T, env.slit_t, env.dt, env.v, env.R,
+    #                        env.alpha, env.slit1, env.slit2, env.x_min, env.x_max)
+    ctrl = DoubleSlitPathIntegral(env, 100000)
     traj = []
-    for _ in tqdm(range(100)):
-        x, t, done = env.reset()
+    for _ in tqdm(range(1000)):
+        x, t, done = env.reset(x_0=-1.0)
         while not done:
             u = ctrl.command(x, t)
             x, t, done = env.step(u=u)
